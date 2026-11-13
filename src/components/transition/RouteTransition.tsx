@@ -1,18 +1,20 @@
 import { Component, lazy, Suspense, useEffect, useState } from 'react'
 import type { AnimationEvent, ErrorInfo, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
 import './route-transition.css'
 
 const BookScene = lazy(() =>
   import('./BookScene.tsx').catch((error: unknown) => {
     console.error(error)
-    return { default: CssBook }
+    return { default: function BookFallback() { return <CssBook animated={false} /> } }
   }),
 )
 
 const FLIP_MS = 1320
+const CSS_MS = 1900
 const REDUCED_MS = 420
-const SAFETY_MS = 2200
+const SAFETY_MS = 2600
 
 type BookMode = 'reduce' | 'css' | 'webgl'
 
@@ -114,28 +116,47 @@ class TransitionGuard extends Component<{ children: ReactNode }, { failed: boole
   }
 }
 
-function CssBook() {
+const LEAVES = [
+  { front: ['هذا سفر في علم اللسان', 'وحرف الضاد عنوان بيانها'] },
+  { front: ['والمعرفة تسكن الورق', 'فاقلب الصفحة تجد أثرها'] },
+  { front: ['في كل صفحة أثر من البيان', 'وفي كل سطر نسب للعربية'] },
+]
+
+function CssBook({ animated }: { animated: boolean }) {
+  const [live, setLive] = useState(false)
+
+  useEffect(() => {
+    if (!animated) return undefined
+    const id = window.requestAnimationFrame(() => setLive(true))
+    return () => window.cancelAnimationFrame(id)
+  }, [animated])
+
   return (
-    <div className="css-book" aria-hidden="true">
-      <div className="css-book__cover">
-        <div className="css-book__page css-book__page--left">
-          <p>هذا سفر في علم اللسان</p>
-          <p>وحرف الضاد عنوان بيانها</p>
+    <div className={live ? 'css-book is-live' : 'css-book'} aria-hidden="true">
+      <div className="css-book__board">
+        <div className="css-book__corners">
+          <i /><i /><i /><i />
         </div>
-        <div className="css-book__page css-book__page--right">
-          <p>والمعرفة تنتقل مع الورق</p>
-          <p>فاقلب الصفحة تجد أثرها</p>
+        <div className="css-book__spine"><span /></div>
+        <div className="css-book__edges" />
+        <div className="css-book__sheet css-book__sheet--left">
+          <p>باب البيان في لغة الضاد</p>
+          <p>وما يُحفظ من فصيح الكلام</p>
         </div>
-        <div className="css-book__turn">
-          <div className="css-book__face css-book__face--front">
-            <p>تُقام المعاني على أبنية الكلام</p>
-            <p>ويحفظ النحو حدود العبارة</p>
+        <div className="css-book__sheet css-book__sheet--right">
+          <p>هنا تستقر الصفحة الأخيرة</p>
+          <p>بعد أن تُقلب أوراق المعرفة</p>
+        </div>
+        {LEAVES.map((leaf, index) => (
+          <div className={`css-book__leaf css-book__leaf--${index + 1}`} key={index}>
+            <div className="css-book__hinge">
+              <div className="css-book__face">
+                {leaf.front.map((line) => <p key={line}>{line}</p>)}
+              </div>
+              <div className="css-book__curl" />
+            </div>
           </div>
-          <div className="css-book__face css-book__face--back">
-            <p>وقد جرت عادة الكتّاب</p>
-            <p>أن يضبطوا اللفظ قبل إرساله</p>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   )
@@ -144,11 +165,12 @@ function CssBook() {
 function RouteTransitionInner() {
   const { pathname } = useLocation()
   const [shownPath, setShownPath] = useState(pathname)
-  const [run, setRun] = useState<null | { at: number; mode: BookMode; path: string }>(null)
+  const [run, setRun] = useState<null | { at: number; mode: BookMode; path: string; mobile: boolean }>(null)
 
   if (pathname !== shownPath) {
     setShownPath(pathname)
-    setRun({ at: performance.now(), mode: bookMode(), path: pathname })
+    const mobile = isMobileDevice()
+    setRun({ at: performance.now(), mode: bookMode(), path: pathname, mobile })
   }
 
   useEffect(() => {
@@ -168,7 +190,7 @@ function RouteTransitionInner() {
 
   useEffect(() => {
     if (!run) return undefined
-    const total = run.mode === 'reduce' ? REDUCED_MS : FLIP_MS
+    const total = run.mode === 'css' ? CSS_MS : run.mode === 'reduce' && run.mobile ? 900 : run.mode === 'reduce' ? REDUCED_MS : FLIP_MS
     const close = () => setRun(null)
     const id = window.setTimeout(close, total)
     const safety = window.setTimeout(close, SAFETY_MS)
@@ -198,27 +220,30 @@ function RouteTransitionInner() {
     setRun(null)
   }
 
-  return (
+  const showCssBook = run.mode === 'css' || (run.mode === 'reduce' && run.mobile)
+  const overlay = (
     <div
-      className="route-transition"
+      className={showCssBook ? 'route-transition route-transition--css' : 'route-transition'}
       data-book-mode={run.mode}
       role="status"
       aria-live="polite"
       onAnimationEnd={finishIfOurs}
     >
       {run.mode === 'webgl' ? (
-        <BookBoundary fallback={<CssBook />}>
-          <Suspense fallback={<CssBook />}>
+        <BookBoundary fallback={<CssBook animated={false} />}>
+          <Suspense fallback={<CssBook animated={false} />}>
             <div className="route-transition__stage" key={run.at}>
               <BookScene startedAt={run.at} />
             </div>
           </Suspense>
         </BookBoundary>
       ) : null}
-      {run.mode === 'css' ? <CssBook /> : null}
+      {showCssBook ? <CssBook key={run.at} animated={run.mode === 'css'} /> : null}
       <p>جاري تقليب صفحات المعرفة...</p>
     </div>
   )
+
+  return createPortal(overlay, document.body)
 }
 
 export function RouteTransition() {
