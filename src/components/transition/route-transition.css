@@ -1,0 +1,48 @@
+.route-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(255, 250, 240, 0.28), transparent 42%),
+    radial-gradient(ellipse at center, #f6ead4 0%, #e5d0ad 62%, #c8ab82 100%);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.route-transition__stage {
+  width: min(820px, 96vw);
+  height: min(620px, 68vh);
+}
+
+.route-transition__stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.route-transition p {
+  margin: 8px 0 0;
+  width: min(640px, 92vw);
+  color: #760d0b;
+  font-family: "Cairo", "Tajawal", "Noto Sans Arabic", sans-serif;
+  font-size: clamp(1.05rem, 2.5vw, 1.5rem);
+  font-weight: 700;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .route-transition {
+    animation: knowledge-fade 1.32s ease forwards;
+  }
+}
+
+@keyframes knowledge-fade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
